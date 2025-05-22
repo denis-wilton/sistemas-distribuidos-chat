@@ -1,5 +1,7 @@
 const WebSocket = require("ws");
 const wss = new WebSocket.Server({ port: 8080 });
+const { createTickManager } = require("./tickManager");
+const { createBot } = require("./bot");
 
 function createMessageManager() {
   const messages = [];
@@ -37,41 +39,8 @@ function createMessageManager() {
   return { addMessage, getAllMessages, getLastMessage, subscribe, unsubscribe };
 }
 
-function createBot(params) {
-  const botName = `bot-${Math.random().toString(36).substring(2, 15)}`;
-  const createdAt = Date.now();
-  const lifeTime = Math.floor(Math.random() * 1000) + 1000;
-
-  function sendMessage(message) {
-    params.sendMessage(message);
-  }
-
-  function readMessage(message) {
-    if (message.includes(botName)) {
-      sendMessage(`Oh, are you talking to me? Sorry, I'm busy right now.`);
-    }
-  }
-
-  function onEnterRoom() {
-    sendMessage(`Hello, I'm ${botName} and I will stay here for ${lifeTime}ms`);
-  }
-
-  function onLeaveRoom() {
-    sendMessage(`Goodbye, I'm ${botName} and I'm leaving the room`);
-  }
-
-  return {
-    name: botName,
-    lifeTime,
-    createdAt,
-    onEnterRoom,
-    readMessage,
-    onLeaveRoom,
-    sendMessage,
-  };
-}
-
 function createBotsManager(messageManager) {
+  const tickManager = createTickManager();
   const bots = [];
 
   function addBot(bot) {
@@ -81,45 +50,35 @@ function createBotsManager(messageManager) {
 
   function removeBot(bot) {
     bots.splice(bots.indexOf(bot), 1);
-    bot.onLeaveRoom();
+    bot.onBeforeLeaveRoom();
   }
 
-  function tick() {
+  tickManager.addTask(() => {
+    if (Math.random() < 0.95) {
+      return;
+    }
+
     if (Math.random() > 0.8) {
       const randomBotQuantity = Math.floor(Math.random() * 10) + 1;
       for (let i = 0; i < randomBotQuantity; i++) {
-        addBot(
-          createBot({
-            sendMessage: (message) => messageManager.addMessage(message),
-          })
-        );
+        const bot = createBot({
+          sendMessage: (message) => messageManager.addMessage(message),
+          leaveRoom: () => removeBot(bot),
+        });
+        addBot(bot);
       }
     }
-
     bots.forEach((bot) => {
       if (Math.random() > 0.9) {
-        let message = `Random message from ${bot.name}`;
-        const shouldTalkToAnotherBot = Math.random() > 0.5;
-        if (shouldTalkToAnotherBot) {
-          const anotherBot = bots[Math.floor(Math.random() * bots.length)];
-          message = `Random message from ${bot.name} to ${anotherBot.name}`;
-        }
-        bot.sendMessage(message);
+        bot.sendMessage(`Random message from ${bot.name}`);
       }
     });
-
     bots.forEach((bot) => {
       if (Date.now() - bot.createdAt > bot.lifeTime) {
         removeBot(bot);
       }
     });
-
-    setTimeout(tick, Math.floor(Math.random() * 1000) + 100);
-  }
-
-  setTimeout(() => {
-    tick();
-  }, 50);
+  });
 
   return { addBot, removeBot };
 }
