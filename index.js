@@ -9,13 +9,12 @@ function createMessageManager() {
 
   let subscribers = [];
 
-  function addMessage(message) {
-    messages.push(message);
+  function addMessage(message, type, name) {
+    messages.push({ message, type, name });
     messages.length > 100 && messages.shift();
     lastMessage = message;
-    console.log("message", message);
     subscribers.forEach((subscriber) =>
-      subscriber({ type: "message", data: message })
+      subscriber({ type: "message", data: { message, type, name } })
     );
   }
 
@@ -62,15 +61,16 @@ function createBotsManager(messageManager) {
       const randomBotQuantity = Math.floor(Math.random() * 10) + 1;
       for (let i = 0; i < randomBotQuantity; i++) {
         const bot = createBot({
-          sendMessage: (message) => messageManager.addMessage(message),
+          sendMessage: (message, type, name) =>
+            messageManager.addMessage(message, type, name),
           leaveRoom: () => removeBot(bot),
         });
         addBot(bot);
       }
     }
     bots.forEach((bot) => {
-      if (Math.random() > 0.9) {
-        bot.sendMessage(`Random message from ${bot.name}`);
+      if (Math.random() > 0.95) {
+        bot.sendMessage(`Random message from ${bot.name}`, "user");
       }
     });
     bots.forEach((bot) => {
@@ -93,7 +93,7 @@ const commands = {
     return "pong";
   },
   message: (data) => {
-    messageManager.addMessage(data);
+    messageManager.addMessage(data.message, data.type, data.name);
     return "message sent";
   },
 };

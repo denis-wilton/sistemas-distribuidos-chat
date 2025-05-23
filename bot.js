@@ -67,17 +67,21 @@ function getRandomOf(array) {
   return array[Math.floor(Math.random() * array.length)];
 }
 
+const FIFTEEN_SECONDS = 15 * 1000;
+const TWO_MINUTES = 2 * 60 * 1000;
 function createBot({ sendMessage, leaveRoom }) {
   const botName = `${getRandomOf(FIRST_NAME)} ${getRandomOf(LAST_NAME)}`;
   const createdAt = Date.now();
-  const lifeTime = Math.floor(Math.random() * 1000) + 1000;
+  const lifeTime =
+    Math.floor(Math.random() * (TWO_MINUTES - FIFTEEN_SECONDS)) +
+    FIFTEEN_SECONDS;
 
   function onEnterRoom() {
-    sendMessage(`Hello, I'm ${botName} and I will stay here for ${lifeTime}ms`);
+    sendMessage(`${botName} has entered the room`, "system", botName);
   }
 
   function onBeforeLeaveRoom() {
-    sendMessage(`Goodbye, I'm ${botName} and I'm leaving the room`);
+    sendMessage(`${botName} is leaving the room`, "system", botName);
   }
 
   return {
@@ -86,7 +90,7 @@ function createBot({ sendMessage, leaveRoom }) {
     createdAt,
     onEnterRoom,
     onBeforeLeaveRoom,
-    sendMessage,
+    sendMessage: (message, type) => sendMessage(message, type, botName),
   };
 }
 
