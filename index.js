@@ -3,6 +3,39 @@ const wss = new WebSocket.Server({ port: 8080 });
 const { createTickManager } = require("./tickManager");
 const { createBot } = require("./bot");
 
+const randomMessages = [
+  "Hello, my name is {{name}}",
+  "I'm {{name}}",
+  "Olá, meu nome é {{name}}",
+  "Oi pessoal, tudo bem?",
+  "Como vocês estão?",
+  "Estou bem, obrigado!",
+  "Estou cansado",
+  "Estou feliz",
+  "Estou triste",
+  "Estou animado",
+  "Estou bravo",
+  "Estou chateado",
+  "Putz, perdi dinheiro denovo! Vou parar de comprar PETR4!",
+  "PETR4 ta indo para 100 reais!",
+  "VALE3 ta indo para 100 reais!",
+  "BBDC4 ta indo para 100 reais!",
+  "ITUB4 ta indo para 100 reais!",
+  "PETR4 ta indo para 100 reais!",
+  "Bora bora bora bora!",
+  "Aeeeeee",
+  "kkkkkkkkkkkkkkkkkkkkkkkk",
+  "shuahsuahushaushuahu",
+  "Vai Corinthians!",
+  "Vai São Paulo!",
+  "Vai Palmeiras!",
+  "Pessoal, to vendendo uma geladeira, quem quer comprar?",
+  "Esses dias eu vi um maluco aqui querendo vender uma geladeira, mas eu não queria, então eu falei para ele ir se fuder",
+  "Tô com fome, alguém tem comida?",
+  "Faz o pix ai irmão",
+  "Se liga, isso aqui é um assalto!",
+];
+
 function createMessageManager() {
   const messages = [];
   let lastMessage = null;
@@ -41,15 +74,31 @@ function createMessageManager() {
 function createBotsManager(messageManager) {
   const tickManager = createTickManager();
   const bots = [];
+  let subscribers = [];
+
+  function subscribe(subscriber) {
+    subscribers.push(subscriber);
+    return () => unsubscribe(subscriber);
+  }
+
+  function unsubscribe(subscriber) {
+    subscribers = subscribers.filter((s) => s !== subscriber);
+  }
 
   function addBot(bot) {
     bots.push(bot);
     bot.onEnterRoom();
+    subscribers.forEach((subscriber) =>
+      subscriber({ type: "enterRoom", data: { bot } })
+    );
   }
 
   function removeBot(bot) {
     bots.splice(bots.indexOf(bot), 1);
     bot.onBeforeLeaveRoom();
+    subscribers.forEach((subscriber) =>
+      subscriber({ type: "leaveRoom", data: { bot } })
+    );
   }
 
   tickManager.addTask(() => {
@@ -70,7 +119,12 @@ function createBotsManager(messageManager) {
     }
     bots.forEach((bot) => {
       if (Math.random() > 0.95) {
-        bot.sendMessage(`Random message from ${bot.name}`, "user");
+        bot.sendMessage(
+          randomMessages[
+            Math.floor(Math.random() * randomMessages.length)
+          ].replace("{{name}}", bot.name),
+          "user"
+        );
       }
     });
     bots.forEach((bot) => {
@@ -80,7 +134,7 @@ function createBotsManager(messageManager) {
     });
   });
 
-  return { addBot, removeBot };
+  return { addBot, removeBot, subscribe, allBots: bots };
 }
 
 const messageManager = createMessageManager();
@@ -103,14 +157,24 @@ wss.on("connection", (s) => {
   clients.push(s);
 
   const unsubscribe = messageManager.subscribe(({ type, data }) => {
-    clients.forEach((client) => {
-      client.send(JSON.stringify({ type, data }));
-    });
+    s.send(JSON.stringify({ type, data }));
   });
+
+  const unsubscribeBots = botsManager.subscribe(({ type, data }) => {
+    s.send(JSON.stringify({ type, data }));
+  });
+
+  s.send(
+    JSON.stringify({
+      type: "listRoom",
+      data: botsManager.allBots.map((bot) => ({ name: bot.name })),
+    })
+  );
 
   s.on("close", () => {
     clients.splice(clients.indexOf(s), 1);
     unsubscribe();
+    unsubscribeBots();
   });
 
   s.on("message", (message) => {
