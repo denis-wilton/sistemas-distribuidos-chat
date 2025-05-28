@@ -67,14 +67,14 @@ function getRandomOf(array) {
   return array[Math.floor(Math.random() * array.length)];
 }
 
-const FIFTEEN_SECONDS = 15 * 1000;
-const TWO_MINUTES = 2 * 60 * 1000;
-function createBot({ sendMessage, leaveRoom }) {
+function randomBetween(min, max) {
+  return Math.floor(Math.random() * (max - min)) + min;
+}
+
+function createBot({ sendMessage }) {
   const botName = `${getRandomOf(FIRST_NAME)} ${getRandomOf(LAST_NAME)}`;
   const createdAt = Date.now();
-  const lifeTime =
-    Math.floor(Math.random() * (TWO_MINUTES - FIFTEEN_SECONDS)) +
-    FIFTEEN_SECONDS;
+  const lifeTime = randomBetween(5000, 15 * 60 * 1000);
 
   function onEnterRoom() {
     sendMessage(`${botName} has entered the room`, "system", botName);

@@ -1,40 +1,11 @@
 const WebSocket = require("ws");
+const fs = require("fs");
 const wss = new WebSocket.Server({ port: 8080 });
 const { createTickManager } = require("./tickManager");
 const { createBot } = require("./bot");
 
-const randomMessages = [
-  "Hello, my name is {{name}}",
-  "I'm {{name}}",
-  "Olá, meu nome é {{name}}",
-  "Oi pessoal, tudo bem?",
-  "Como vocês estão?",
-  "Estou bem, obrigado!",
-  "Estou cansado",
-  "Estou feliz",
-  "Estou triste",
-  "Estou animado",
-  "Estou bravo",
-  "Estou chateado",
-  "Putz, perdi dinheiro denovo! Vou parar de comprar PETR4!",
-  "PETR4 ta indo para 100 reais!",
-  "VALE3 ta indo para 100 reais!",
-  "BBDC4 ta indo para 100 reais!",
-  "ITUB4 ta indo para 100 reais!",
-  "PETR4 ta indo para 100 reais!",
-  "Bora bora bora bora!",
-  "Aeeeeee",
-  "kkkkkkkkkkkkkkkkkkkkkkkk",
-  "shuahsuahushaushuahu",
-  "Vai Corinthians!",
-  "Vai São Paulo!",
-  "Vai Palmeiras!",
-  "Pessoal, to vendendo uma geladeira, quem quer comprar?",
-  "Esses dias eu vi um maluco aqui querendo vender uma geladeira, mas eu não queria, então eu falei para ele ir se fuder",
-  "Tô com fome, alguém tem comida?",
-  "Faz o pix ai irmão",
-  "Se liga, isso aqui é um assalto!",
-];
+const randomMessages = fs.readFileSync("./messages.txt", "utf8").split("\n");
+const MAX_BOTS = 150;
 
 function createMessageManager() {
   const messages = [];
@@ -43,6 +14,17 @@ function createMessageManager() {
   let subscribers = [];
 
   function addMessage(message, type, name) {
+    let color;
+
+    if (type === "system") {
+      color = "\x1b[90m"; // cinza
+    } else if (type === "user") {
+      color = "\x1b[34m"; // azul
+    } else {
+      color = "\x1b[31m"; // vermelho (padrão para outros tipos)
+    }
+
+    console.log("addMessage", type, name, `${color}${message}\x1b[0m`);
     messages.push({ message, type, name });
     messages.length > 100 && messages.shift();
     lastMessage = message;
@@ -73,7 +55,14 @@ function createMessageManager() {
 
 function createBotsManager(messageManager) {
   const tickManager = createTickManager();
-  const bots = [];
+  const bots = Array.from({ length: MAX_BOTS }, () => {
+    const bot = createBot({
+      leaveRoom: () => removeBot(bot),
+      sendMessage: (message, type) =>
+        messageManager.addMessage(message, type, bot.name),
+    });
+    return bot;
+  });
   let subscribers = [];
 
   function subscribe(subscriber) {
@@ -87,6 +76,7 @@ function createBotsManager(messageManager) {
 
   function addBot(bot) {
     bots.push(bot);
+    console.log(bots.length);
     bot.onEnterRoom();
     subscribers.forEach((subscriber) =>
       subscriber({ type: "enterRoom", data: { bot } })
@@ -95,6 +85,7 @@ function createBotsManager(messageManager) {
 
   function removeBot(bot) {
     bots.splice(bots.indexOf(bot), 1);
+    console.log(bots.length);
     bot.onBeforeLeaveRoom();
     subscribers.forEach((subscriber) =>
       subscriber({ type: "leaveRoom", data: { bot } })
@@ -102,34 +93,29 @@ function createBotsManager(messageManager) {
   }
 
   tickManager.addTask(() => {
-    if (Math.random() < 0.95) {
-      return;
+    if (bots.length < MAX_BOTS && Math.random() > 0.9) {
+      const bot = createBot({
+        leaveRoom: () => removeBot(bot),
+        sendMessage: (message, type) =>
+          messageManager.addMessage(message, type, bot.name),
+      });
+      addBot(bot);
     }
 
-    if (Math.random() > 0.8) {
-      const randomBotQuantity = Math.floor(Math.random() * 10) + 1;
-      for (let i = 0; i < randomBotQuantity; i++) {
-        const bot = createBot({
-          sendMessage: (message, type, name) =>
-            messageManager.addMessage(message, type, name),
-          leaveRoom: () => removeBot(bot),
-        });
-        addBot(bot);
-      }
-    }
     bots.forEach((bot) => {
-      if (Math.random() > 0.95) {
+      const shouldExit = bot.lifeTime - (Date.now() - bot.createdAt) < 0;
+      if (shouldExit) {
+        removeBot(bot);
+        return;
+      }
+
+      if (Math.random() > 0.999) {
         bot.sendMessage(
           randomMessages[
             Math.floor(Math.random() * randomMessages.length)
           ].replace("{{name}}", bot.name),
           "user"
         );
-      }
-    });
-    bots.forEach((bot) => {
-      if (Date.now() - bot.createdAt > bot.lifeTime) {
-        removeBot(bot);
       }
     });
   });
